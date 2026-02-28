@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module example_tb;
     logic clk = 0;
     logic rst_n;
