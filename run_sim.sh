@@ -21,20 +21,17 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-# Trim path (remove sim/) and extensions (.sv, .v)
-# ${1##*/} removes everything up to the last slash
-# ${temp%.*} removes the last extension
 raw_input="${1##*/}"
 tb_module="${raw_input%.*}"
 
 tb_file="$SIM_DIR/${tb_module}.sv"
 trigger_file="$TOOL_DIR/dump_trigger.sv"
 
-# Output file paths
+# Static path for viewing, Timestamped path for backup
+current_vcd="$VCD_DIR/current.vcd"
+backup_vcd="$VCD_DIR/${tb_module}_${timestamp}.vcd"
 vvp_out="$VVP_DIR/${tb_module}_${timestamp}.vvp"
-vcd_out="$VCD_DIR/${tb_module}_${timestamp}.vcd"
 
-# Ensure directories exist
 mkdir -p "$VVP_DIR" "$VCD_DIR"
 
 # --- 4. Validation ---
@@ -43,8 +40,9 @@ if [ ! -f "$tb_file" ]; then
     exit 1
 fi
 
-# --- 5. Waveform Management ---
-echo "--- Cleaning old waveforms in $VCD_DIR (Target: $MAX_WAVES) ---"
+# --- 5. Waveform Management (Backups) ---
+echo "--- Cleaning old backups in $VCD_DIR (Target: $MAX_WAVES) ---"
+# We only clean the timestamped files, leaving current.vcd alone
 old_waves=$(ls -1tr "$VCD_DIR/${tb_module}"_*.vcd 2>/dev/null | \
             head -n -$(($MAX_WAVES - 1)))
 
@@ -54,8 +52,9 @@ done
 
 # --- 6. Compilation ---
 echo "--- Compiling: $tb_module ---"
+# Note: We tell Icarus to dump directly to 'current.vcd' for the viewer
 iverilog -g2012 -Wall \
-    -D DUMP_FILE="\"$vcd_out\"" \
+    -D DUMP_FILE="\"$current_vcd\"" \
     -p VCD_ARRAY_DUMP=1 \
     -s "$tb_module" \
     -s dump_trigger \
@@ -68,7 +67,21 @@ if [ $? -eq 0 ]; then
     # --- 7. Simulation & Visualization ---
     echo "--- Running Simulation ---"
     vvp -n "$vvp_out" +mda
-    [ -f "$vcd_out" ] && surfer "$vcd_out"
+
+    if [ -f "$current_vcd" ]; then
+        # 1. Create the timestamped backup copy
+        cp "$current_vcd" "$backup_vcd"
+        echo "Saved backup to: $backup_vcd"
+
+        # 2. Handle Surfer: Launch only if not already running
+        if pgrep -x "surfer" > /dev/null; then
+            echo "Surfer is already open. Please reload/refresh 'current.vcd' in the UI."
+            exit 0
+        else
+            echo "Launching Surfer..."
+            surfer "$current_vcd" &
+        fi
+    fi
 else
     echo "Compilation failed!"
     exit 1
