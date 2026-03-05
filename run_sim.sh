@@ -56,6 +56,7 @@ done
 echo "--- Compiling: $tb_module ---"
 iverilog -g2012 -Wall \
     -D DUMP_FILE="\"$vcd_out\"" \
+    -p VCD_ARRAY_DUMP=1 \
     -s "$tb_module" \
     -s dump_trigger \
     -o "$vvp_out" \
@@ -66,7 +67,7 @@ iverilog -g2012 -Wall \
 if [ $? -eq 0 ]; then
     # --- 7. Simulation & Visualization ---
     echo "--- Running Simulation ---"
-    vvp -n "$vvp_out"
+    vvp -n "$vvp_out" +mda
     [ -f "$vcd_out" ] && surfer "$vcd_out"
 else
     echo "Compilation failed!"
